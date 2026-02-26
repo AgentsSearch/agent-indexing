@@ -1,0 +1,16 @@
+# Databases and Vector Indexes
+agents.db
+agents_mock.db
+*.db
+*.index
+
+# Python Cache Files
+__pycache__/
+*.py[cod]
+
+# Virtual Environments & Secrets
+venv/
+.env
+
+# OS Mac/Linux hidden files
+.DS_Store

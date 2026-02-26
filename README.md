@@ -1,0 +1,1 @@
+Just run the main.py file to execute the entire pipeline. It will initialize the database, build the index from the provided JSON file, and then run a test search query. You can modify the test search query in main.py to try out different searches!
