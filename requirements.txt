@@ -1,0 +1,6 @@
+faiss-cpu==1.7.4
+numpy==1.25.2
+sentence-transformers
+fastapi
+uvicorn
+pydantic

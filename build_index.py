@@ -27,7 +27,8 @@ def load_and_index(json_file='../Agent-Search-Engine/mcp_agents.json', db_file='
             agent.get("description", ""), ", ".join(agent.get("tools", [])),
             ", ".join(agent.get("detected_capabilities", [])),
             agent.get("arena_elo"), agent.get("community_rating"),
-            agent.get("testability_tier", "UNTESTED"), agent.get("pricing", "unknown")
+            agent.get("testability_tier", "UNTESTED"), agent.get("pricing", "unknown"),
+            agent.get("mcp_server_url", f"http://localhost/{a_id}")
         ))
         descriptions.append(agent.get("description", ""))
         faiss_id += 1
@@ -46,9 +47,10 @@ def load_and_index(json_file='../Agent-Search-Engine/mcp_agents.json', db_file='
                 faiss_id INTEGER PRIMARY KEY,
                 agent_id TEXT, name TEXT, source TEXT, description TEXT, 
                 tools TEXT, capabilities TEXT, arena_elo REAL, community_rating REAL, 
-                testability_tier TEXT, pricing TEXT
+                testability_tier TEXT, pricing TEXT, mcp_server_url TEXT
+
             )""")
-        conn.executemany("INSERT INTO agents VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", db_data)
+        conn.executemany("INSERT INTO agents VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", db_data)
         
     print(f"Success! Indexed {len(db_data)} unique agents.")
 
