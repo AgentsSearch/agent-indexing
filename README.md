@@ -9,3 +9,12 @@ python -m uvicorn api:app --reload
 curl -X POST http://127.0.0.1:8000/search \
 -H "Content-Type: application/json" \
 -d '{"query": "I need a tool to track expenses"}'
+
+
+
+## For Probing
+- pip install requirements.txt
+- run main.py (modify  location of mcp agent files in main.py if needed)
+- run api:" python -m uvicorn api:app --reload"
+- see branch with changes to probing pipelines run_pipeline.py
+
