@@ -1,6 +1,17 @@
 ### build db and index
 Just run the main.py file to execute the entire pipeline. It will initialize the database, build the index from the provided JSON file, and then run a test search query. You can modify the test search query in main.py to try out different searches!
 
+You can also build directly from one or more JSON files:
+
+```bash
+python build_index.py --json ../Agent-Search-Engine/mcp_agents.json
+python build_index.py --json ../Agent-Search-Engine/mcp_agents.json ../TAAFT-Scraping/agents_mcp.json
+```
+
+Notes:
+- The indexer now accepts multiple files in one run.
+- It supports MCP records and converted TAAFT records in the same index.
+
 
 ### run api 
 python -m uvicorn api:app --reload
