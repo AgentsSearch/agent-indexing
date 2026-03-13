@@ -1,5 +1,5 @@
-faiss-cpu==1.7.4
-numpy==1.25.2
+faiss-cpu
+numpy
 sentence-transformers
 fastapi
 uvicorn

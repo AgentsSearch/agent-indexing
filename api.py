@@ -1,3 +1,4 @@
+import json
 from fastapi import FastAPI
 from pydantic import BaseModel
 import faiss
@@ -34,20 +35,20 @@ def search(req: SearchQuery):
     with sqlite3.connect('agents.db') as conn:
         for i, faiss_id in enumerate(ids[0]):
             res = conn.execute(
-                "SELECT agent_id, name, description, tools, capabilities, mcp_server_url FROM agents WHERE faiss_id = ?", 
+                "SELECT agent_id, name, description, tools, capabilities, mcp_server_url, documentation, llm_extracted FROM agents WHERE faiss_id = ?",
                 (int(faiss_id),)
             ).fetchone()
-            
+
             if res:
                 base_score = float(distances[0][i])
-                agent_text = (res[2] + " " + res[4]).lower() 
-                
+                agent_text = (res[2] + " " + res[4]).lower()
+
                 # 3. Uses active_domains here
                 for domain in active_domains:
                     if any(w in agent_text for w in DOMAINS[domain]):
-                        base_score += 0.15  
+                        base_score += 0.15
                         break
-                
+
                 results.append({
                     "agent_id": res[0],
                     "name": res[1],
@@ -55,6 +56,8 @@ def search(req: SearchQuery):
                     "tools": [t.strip() for t in res[3].split(",") if t.strip()],
                     "capabilities": [c.strip() for c in res[4].split(",") if c.strip()],
                     "mcp_server_url": res[5],
+                    "documentation": json.loads(res[6]) if res[6] else None,
+                    "llm_extracted": json.loads(res[7]) if res[7] else None,
                     "score": round(base_score, 4)
                 })
     
