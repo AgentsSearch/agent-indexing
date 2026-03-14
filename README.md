@@ -1,31 +1,54 @@
-### build db and index
-Just run the main.py file to execute the entire pipeline. It will initialize the database, build the index from the provided JSON file, and then run a test search query. You can modify the test search query in main.py to try out different searches!
-
-You can also build directly from one or more JSON files:
+### Setup
 
 ```bash
-python build_index.py --json ../Agent-Search-Engine/mcp_agents.json
-python build_index.py --json ../Agent-Search-Engine/mcp_agents.json ../TAAFT-Scraping/agents_mcp.json
+pip install -r requirements.txt
+cp .env.example .env  # fill in your values
+```
+
+See `.env.example` for required environment variables (`API_TOKEN`, `CEREBRAS_API_KEY`).
+
+### Build DB and Index
+
+Run `main.py` to execute the entire pipeline (init DB, build index, test search):
+
+```bash
+python main.py
+```
+
+Or build directly from one or more JSON files:
+
+```bash
+python build_index.py --json mcp_ai_agents_remote.json
+python build_index.py --json file1.json file2.json
 ```
 
 Notes:
-- The indexer now accepts multiple files in one run.
+- The indexer accepts multiple files in one run.
 - It supports MCP records and converted TAAFT records in the same index.
 
+### Run API
 
-### run api 
+```bash
+export API_TOKEN=your-secret-token
 python -m uvicorn api:app --reload
+```
 
-### test response to use
+### Test Search
+
+```bash
 curl -X POST http://127.0.0.1:8000/search \
--H "Content-Type: application/json" \
--d '{"query": "I need a tool to track expenses"}'
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "I need a tool to track expenses"}'
+```
 
+### For Probing
 
+1. Build the index (see above)
+2. Run the API on port 8000
+3. Run the probing pipeline:
 
-## For Probing
-- pip install requirements.txt
-- run main.py (modify  location of mcp agent files in main.py if needed)
-- run api:" python -m uvicorn api:app --reload"
-- see branch with changes to probing pipelines run_pipeline.py
-
+```bash
+export CEREBRAS_API_KEY=your-key
+python run_pipeline.py --query "Find the current weather in London"
+```

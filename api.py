@@ -1,11 +1,20 @@
 import json
-from fastapi import FastAPI
+import os
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 import faiss
 import sqlite3
 from sentence_transformers import SentenceTransformer
 
 app = FastAPI()
+security = HTTPBearer()
+API_TOKEN = os.environ.get("API_TOKEN")
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not API_TOKEN or credentials.credentials != API_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid or missing token")
+    return credentials
 model = SentenceTransformer('all-MiniLM-L6-v2')
 index = faiss.read_index('agents.index')
 
@@ -21,7 +30,7 @@ class SearchQuery(BaseModel):
     limit: int = 50
 
 @app.post("/search")
-def search(req: SearchQuery):
+def search(req: SearchQuery, _=Depends(verify_token)):
     vec = model.encode([req.query]).astype('float32')
     faiss.normalize_L2(vec)
 
