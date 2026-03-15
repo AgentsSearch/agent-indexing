@@ -1,33 +1,54 @@
 import sqlite3
 
-# Creates a local file called agents_mock.db
-conn = sqlite3.connect('agents.db')
-cur = conn.cursor()
 
-# Create table (modified slightly for SQLite compatibility)
-def initialize_db():
+def initialize_db(db_file='agents.db'):
+    conn = sqlite3.connect(db_file)
+    cur = conn.cursor()
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS agents (
-    agent_id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    source TEXT NOT NULL,
-    description TEXT,
-    tools TEXT,
-    capabilities TEXT,
-    arena_elo REAL,
-    community_rating REAL,
-    testability_tier TEXT,
-    pricing TEXT,
-    indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        faiss_id INTEGER PRIMARY KEY,
+        agent_id TEXT,
+        name TEXT,
+        source TEXT,
+        source_url TEXT,
+        description TEXT,
+        tools TEXT,
+        detected_capabilities TEXT,
+        llm_backbone TEXT,
+        arena_elo REAL,
+        arena_battles INTEGER,
+        community_rating REAL,
+        rating_count INTEGER,
+        pricing TEXT,
+        last_updated TEXT,
+        indexed_at TEXT,
+        testability_tier TEXT,
+        is_available INTEGER,
+        availability_status TEXT,
+        is_ai_agent INTEGER,
+        agent_classification TEXT,
+        classification_rationale TEXT,
+        remotes TEXT,
+        probe_status TEXT,
+        probed_tool_count INTEGER,
+        smithery_config TEXT,
+        documentation TEXT,
+        documentation_chunks TEXT,
+        documentation_quality REAL,
+        quality_rationale TEXT,
+        llm_text_source TEXT,
+        llm_extracted TEXT
     );
     """)
 
-    # Create indexes
     cur.execute("CREATE INDEX IF NOT EXISTS idx_agents_source ON agents (source);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_agents_pricing ON agents (pricing);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_agents_elo ON agents (arena_elo);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_agents_available ON agents (is_available);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_agents_classification ON agents (agent_classification);")
 
     conn.commit()
     conn.close()
 
-    print("Mock database ready!")
+    print("Database ready!")

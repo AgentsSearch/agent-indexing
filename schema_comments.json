@@ -1,0 +1,79 @@
+{
+  "agent_id": "string",                     // Unique 16-character hash ID
+  "name": "string",                         // Display name of the MCP server
+  "source": "string",                       // Source registry (e.g., "mcp")
+  "source_url": "string",                   // URL to repo/website/package
+
+  "description": "string",                  // Full description
+
+  "tools": [                                // Array of tool objects
+    {
+      "name": "string",                     // Tool name
+      "description": "string"               // What the tool does
+    }
+  ],
+  "detected_capabilities": ["string"],      // List of detected capabilities
+  "llm_backbone": "string",                 // Framework/model used (e.g., "Python", "TypeScript")
+
+  "arena_elo": null,                        // Arena rating (number or null)
+  "arena_battles": null,                    // Number of arena battles (number or null)
+  "community_rating": null,                 // User rating (number or null)
+  "rating_count": 0,                        // Number of ratings
+
+  "pricing": "string",                      // "free", "freemium", "paid", "open_source", "unknown"
+  "last_updated": "string",                 // ISO 8601 timestamp
+  "indexed_at": "string",                   // ISO 8601 timestamp when scraped
+
+  "description_embedding": null,            // Vector embedding (array of floats or null)
+  "testability_tier": "string",             // "EASY", "MEDIUM", "HARD", "n/a"
+
+  "is_available": true,                     // bool or null — whether the server URL responded with HTTP < 400
+  "availability_status": "string",          // "reachable", "unreachable", "unknown"
+  "is_ai_agent": true,                      // bool or null — LLM-determined: true=AI agent, false=API wrapper
+  "agent_classification": "string",         // "ai_agent", "api_wrapper", "unknown"
+  "classification_rationale": "string",     // LLM explanation for the classification decision
+
+  "remotes": [                              // Live MCP server endpoints (from registry API)
+    {
+      "type": "string",                     // Transport type: "streamable-http", "sse", etc.
+      "url": "string",                      // Server URL
+      "headers": [                          // Optional auth headers
+        {
+          "name": "string",                 // Header name (e.g., "Authorization")
+          "value": "string",               // Header value (may be empty if user must supply)
+          "isRequired": true               // Whether the header is required to connect
+        }
+      ]
+    }
+  ],
+  "probe_status": "string",                // "success", "failed", "skipped" — result of MCP protocol probing
+  "probed_tool_count": 0,                   // Number of tools retrieved via MCP initialize + tools/list
+  "smithery_config": "string",              // "none", "optional", "required", "unknown", or null (non-Smithery)
+
+  "documentation": {                        // Documentation sources
+    "readme": "string",                     // README text (if available)
+    "detail_page": "string"                 // Scraped page text (if no README)
+  },
+
+  "documentation_chunks": [                 // Chunked documentation for embeddings
+    {
+      "chunk_id": 0,                        // Sequential chunk number
+      "text": "string",                     // Chunk content
+      "start_pos": 0,                       // Start position in original text
+      "end_pos": 2048,                      // End position in original text
+      "token_count_estimate": 512,          // Estimated token count
+      "source_type": "string",              // "readme" or "detail_page"
+      "agent_id": "string"                  // Parent agent ID
+    }
+  ],
+
+  "documentation_quality": 0.0,             // Quality score 0.0-1.0
+  "quality_rationale": "string",            // Why the LLM gave this score
+  "llm_text_source": "string",              // "readme", "detail_page", "description_only", "none"
+
+  "llm_extracted": {                        // LLM-extracted metadata (fallback when probing fails)
+    "capabilities": ["string"],             // Extracted capability statements
+    "limitations": ["string"],              // Extracted limitations
+    "requirements": ["string"]              // Extracted requirements
+  }
+}

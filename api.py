@@ -15,15 +15,18 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     if not API_TOKEN or credentials.credentials != API_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid or missing token")
     return credentials
+
 model = SentenceTransformer('all-MiniLM-L6-v2')
 index = faiss.read_index('agents.index')
 
-# 1. Domains dictionary needed for the boost
 DOMAINS = {
     "finance": ["expense", "money", "split", "bill", "pay"],
     "coding": ["code", "git", "sql", "database", "repository"],
     "web": ["scrape", "browser", "html", "search", "url"]
 }
+
+_JSON_COLUMNS = {"tools", "detected_capabilities", "remotes", "documentation",
+                 "documentation_chunks", "llm_extracted"}
 
 class SearchQuery(BaseModel):
     query: str
@@ -35,40 +38,41 @@ def search(req: SearchQuery, _=Depends(verify_token)):
     faiss.normalize_L2(vec)
 
     distances, ids = index.search(vec, req.limit)
-    
-    # 2. Defines active_domains here
+
     q_lower = req.query.lower()
     active_domains = [d for d, words in DOMAINS.items() if any(w in q_lower for w in words)]
-    
+
     results = []
     with sqlite3.connect('agents.db') as conn:
+        conn.row_factory = sqlite3.Row
         for i, faiss_id in enumerate(ids[0]):
-            res = conn.execute(
-                "SELECT agent_id, name, description, tools, capabilities, mcp_server_url, documentation, llm_extracted FROM agents WHERE faiss_id = ?",
+            row = conn.execute(
+                "SELECT * FROM agents WHERE faiss_id = ?",
                 (int(faiss_id),)
             ).fetchone()
 
-            if res:
+            if row:
                 base_score = float(distances[0][i])
-                agent_text = (res[2] + " " + res[4]).lower()
+                agent_text = ((row["description"] or "") + " " + (row["detected_capabilities"] or "")).lower()
 
-                # 3. Uses active_domains here
                 for domain in active_domains:
                     if any(w in agent_text for w in DOMAINS[domain]):
                         base_score += 0.15
                         break
 
-                results.append({
-                    "agent_id": res[0],
-                    "name": res[1],
-                    "description": res[2],
-                    "tools": [t.strip() for t in res[3].split(",") if t.strip()],
-                    "capabilities": [c.strip() for c in res[4].split(",") if c.strip()],
-                    "mcp_server_url": res[5],
-                    "documentation": json.loads(res[6]) if res[6] else None,
-                    "llm_extracted": json.loads(res[7]) if res[7] else None,
-                    "score": round(base_score, 4)
-                })
-    
+                result = dict(row)
+                # Deserialize JSON columns
+                for col in _JSON_COLUMNS:
+                    if result.get(col):
+                        result[col] = json.loads(result[col])
+                # Convert SQLite ints back to bools
+                for col in ("is_available", "is_ai_agent"):
+                    v = result.get(col)
+                    result[col] = bool(v) if v is not None else None
+
+                result["score"] = round(base_score, 4)
+                del result["faiss_id"]
+                results.append(result)
+
     results = sorted(results, key=lambda x: x["score"], reverse=True)
     return {"results": results}

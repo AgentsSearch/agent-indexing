@@ -5,40 +5,47 @@ from pathlib import Path
 from typing import Iterable
 from sentence_transformers import SentenceTransformer
 
+# JSON fields that get serialized as JSON strings in SQLite
+_JSON_FIELDS = ("tools", "detected_capabilities", "remotes", "documentation",
+                "documentation_chunks", "llm_extracted")
 
-def _normalize_tools(raw_tools):
-    """Normalize tools to a list of readable tool names."""
+
+def _tool_names(raw_tools):
+    """Extract readable tool names for search text."""
     if not raw_tools:
         return []
-
-    normalized = []
+    names = []
     for item in raw_tools:
         if isinstance(item, str):
             name = item.strip()
         elif isinstance(item, dict):
-            # MCP servers typically use tool_name; converted records may use name.
             name = str(item.get("tool_name") or item.get("name") or "").strip()
         else:
             name = str(item).strip()
-
         if name:
-            normalized.append(name)
-    return normalized
+            names.append(name)
+    return names
 
 
-def _normalize_capabilities(agent):
-    capabilities = agent.get("detected_capabilities") or []
-    if isinstance(capabilities, list):
-        return [str(c).strip() for c in capabilities if str(c).strip()]
-    if isinstance(capabilities, str):
-        return [c.strip() for c in capabilities.split(",") if c.strip()]
-    return []
+def _tool_descriptions(raw_tools):
+    """Extract tool descriptions for search text."""
+    if not raw_tools:
+        return []
+    descs = []
+    for item in raw_tools:
+        if isinstance(item, dict):
+            desc = str(item.get("description") or "").strip()
+            if desc:
+                descs.append(desc)
+    return descs
 
 
 def _build_search_text(agent, description):
-    """Combine description, llm_extracted capabilities, and documentation
-    into a single text for embedding. Truncate to avoid excessively long inputs."""
+    """Combine description, tool descriptions, llm_extracted, and documentation
+    into a single text for embedding."""
     parts = [description]
+
+    parts.extend(_tool_descriptions(agent.get("tools")))
 
     llm_extracted = agent.get("llm_extracted")
     if isinstance(llm_extracted, dict):
@@ -49,15 +56,8 @@ def _build_search_text(agent, description):
 
     doc = agent.get("documentation")
     if isinstance(doc, dict):
-        # Prefer detail_page; fall back to any string value
-        doc_text = doc.get("detail_page") or ""
-        if not doc_text:
-            for v in doc.values():
-                if isinstance(v, str) and v.strip():
-                    doc_text = v
-                    break
+        doc_text = doc.get("detail_page") or doc.get("readme") or ""
         if doc_text:
-            # Keep first 500 chars to avoid noise from long pages
             parts.append(doc_text[:500])
 
     return " ".join(parts)
@@ -83,6 +83,58 @@ def _normalize_json_inputs(json_files):
     raise TypeError("json_files must be a path string or list/tuple of paths")
 
 
+def _json_or_none(value):
+    """Serialize a value as JSON string, or None if falsy."""
+    return json.dumps(value) if value else None
+
+
+def _bool_to_int(value):
+    """Convert bool/None to SQLite integer (1/0/None)."""
+    if value is None:
+        return None
+    return 1 if value else 0
+
+
+_CREATE_TABLE = """
+CREATE TABLE agents (
+    faiss_id INTEGER PRIMARY KEY,
+    agent_id TEXT,
+    name TEXT,
+    source TEXT,
+    source_url TEXT,
+    description TEXT,
+    tools TEXT,
+    detected_capabilities TEXT,
+    llm_backbone TEXT,
+    arena_elo REAL,
+    arena_battles INTEGER,
+    community_rating REAL,
+    rating_count INTEGER,
+    pricing TEXT,
+    last_updated TEXT,
+    indexed_at TEXT,
+    testability_tier TEXT,
+    is_available INTEGER,
+    availability_status TEXT,
+    is_ai_agent INTEGER,
+    agent_classification TEXT,
+    classification_rationale TEXT,
+    remotes TEXT,
+    probe_status TEXT,
+    probed_tool_count INTEGER,
+    smithery_config TEXT,
+    documentation TEXT,
+    documentation_chunks TEXT,
+    documentation_quality REAL,
+    quality_rationale TEXT,
+    llm_text_source TEXT,
+    llm_extracted TEXT
+)
+"""
+
+_INSERT = "INSERT INTO agents VALUES ({})".format(", ".join("?" * 32))
+
+
 def load_and_index(
     json_files='../Agent-Search-Engine/mcp_agents.json',
     db_file='agents.db',
@@ -102,7 +154,7 @@ def load_and_index(
     model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
     index = faiss.IndexFlatIP(384)
 
-    db_data, descriptions, seen_ids = [], [], set()
+    db_data, search_texts, seen_ids = [], [], set()
 
     faiss_id = 0
     for agent in _iter_agent_records(json_files):
@@ -111,50 +163,60 @@ def load_and_index(
             continue
         seen_ids.add(a_id)
 
-        tool_names = _normalize_tools(agent.get("tools", []))
-        capabilities = _normalize_capabilities(agent)
         description = str(agent.get("description", "") or "")
         search_text = _build_search_text(agent, description)
 
-        # Serialize rich fields as JSON strings for probing
-        documentation = agent.get("documentation")
-        doc_json = json.dumps(documentation) if documentation else None
-        llm_extracted = agent.get("llm_extracted")
-        llm_json = json.dumps(llm_extracted) if llm_extracted else None
-
         db_data.append((
-            faiss_id, a_id, agent.get("name", "Unknown"), agent.get("source", "mcp"),
-            description, ", ".join(tool_names),
-            ", ".join(capabilities),
-            agent.get("arena_elo"), agent.get("community_rating"),
-            agent.get("testability_tier", "UNTESTED"), agent.get("pricing", "unknown"),
-            agent.get("mcp_server_url", f"http://localhost/{a_id}"),
-            doc_json, llm_json
+            faiss_id,
+            a_id,
+            agent.get("name", "Unknown"),
+            agent.get("source", "mcp"),
+            agent.get("source_url"),
+            description,
+            _json_or_none(agent.get("tools")),
+            _json_or_none(agent.get("detected_capabilities")),
+            agent.get("llm_backbone"),
+            agent.get("arena_elo"),
+            agent.get("arena_battles"),
+            agent.get("community_rating"),
+            agent.get("rating_count"),
+            agent.get("pricing", "unknown"),
+            agent.get("last_updated"),
+            agent.get("indexed_at"),
+            agent.get("testability_tier", "UNTESTED"),
+            _bool_to_int(agent.get("is_available")),
+            agent.get("availability_status"),
+            _bool_to_int(agent.get("is_ai_agent")),
+            agent.get("agent_classification"),
+            agent.get("classification_rationale"),
+            _json_or_none(agent.get("remotes")),
+            agent.get("probe_status"),
+            agent.get("probed_tool_count"),
+            agent.get("smithery_config"),
+            _json_or_none(agent.get("documentation")),
+            _json_or_none(agent.get("documentation_chunks")),
+            agent.get("documentation_quality"),
+            agent.get("quality_rationale"),
+            agent.get("llm_text_source"),
+            _json_or_none(agent.get("llm_extracted")),
         ))
-        descriptions.append(search_text)
+        search_texts.append(search_text)
         faiss_id += 1
 
-    if not descriptions:
+    if not search_texts:
         raise ValueError("No valid agent records found in provided JSON files")
 
     print("Generating embeddings...")
-    embeddings = model.encode(descriptions, batch_size=16, show_progress_bar=True).astype('float32')
+    embeddings = model.encode(search_texts, batch_size=16, show_progress_bar=True).astype('float32')
     faiss.normalize_L2(embeddings)
     index.add(embeddings)
     faiss.write_index(index, index_file)
 
     print("Saving to database...")
     with sqlite3.connect(db_file) as conn:
-        conn.execute("""
-            CREATE TABLE agents (
-                faiss_id INTEGER PRIMARY KEY,
-                agent_id TEXT, name TEXT, source TEXT, description TEXT,
-                tools TEXT, capabilities TEXT, arena_elo REAL, community_rating REAL,
-                testability_tier TEXT, pricing TEXT, mcp_server_url TEXT,
-                documentation TEXT, llm_extracted TEXT
-            )""")
-        conn.executemany("INSERT INTO agents VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", db_data)
-        
+        conn.execute(_CREATE_TABLE)
+        conn.executemany(_INSERT, db_data)
+
     print(f"Indexed sources: {', '.join(json_files)}")
     print(f"Success! Indexed {len(db_data)} unique agents.")
 
