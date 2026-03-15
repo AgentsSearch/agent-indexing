@@ -41,24 +41,36 @@ def _tool_descriptions(raw_tools):
 
 
 def _build_search_text(agent, description):
-    """Combine description, tool descriptions, llm_extracted, and documentation
-    into a single text for embedding."""
+    """Combine description, tool names, capabilities, and detected_capabilities
+    into a single text for embedding.
+
+    Priority ordering (model truncates at ~256 tokens, attention decays):
+      1. description           — always present, clearest intent
+      2. tool names (cap 10)   — exact vocabulary: "web_search", "sql_query"
+      3. capabilities          — what the agent does
+      4. detected_capabilities — lightweight domain tags
+
+    Excluded: limitations (anti-signal), requirements (noise),
+    tool descriptions (redundant with capabilities), documentation (markdown noise).
+    """
     parts = [description]
 
-    parts.extend(_tool_descriptions(agent.get("tools")))
+    tool_names = _tool_names(agent.get("tools"))[:10]
+    if tool_names:
+        parts.append("Tools: " + ", ".join(tool_names))
 
     llm_extracted = agent.get("llm_extracted")
     if isinstance(llm_extracted, dict):
-        for field in ("capabilities", "limitations", "requirements"):
-            items = llm_extracted.get(field) or []
-            if isinstance(items, list):
-                parts.extend(str(item) for item in items if str(item).strip())
+        capabilities = llm_extracted.get("capabilities") or []
+        if isinstance(capabilities, list):
+            parts.extend(str(item) for item in capabilities if str(item).strip())
 
-    doc = agent.get("documentation")
-    if isinstance(doc, dict):
-        doc_text = doc.get("detail_page") or doc.get("readme") or ""
-        if doc_text:
-            parts.append(doc_text[:500])
+    detected = agent.get("detected_capabilities")
+    if detected:
+        if isinstance(detected, list):
+            parts.append(", ".join(str(c) for c in detected))
+        elif isinstance(detected, str):
+            parts.append(detected)
 
     return " ".join(parts)
 

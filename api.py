@@ -20,9 +20,9 @@ model = SentenceTransformer('all-MiniLM-L6-v2')
 index = faiss.read_index('agents.index')
 
 DOMAINS = {
-    "finance": ["expense", "money", "split", "bill", "pay"],
-    "coding": ["code", "git", "sql", "database", "repository"],
-    "web": ["scrape", "browser", "html", "search", "url"]
+    "finance": ["expense", "money", "split", "bill", "pay", "invoice", "budget", "accounting"],
+    "coding": ["code", "git", "sql", "database", "repository", "github", "debug", "lint"],
+    "web": ["scrape", "browser", "html", "search", "url", "crawl", "fetch", "http"]
 }
 
 _JSON_COLUMNS = {"tools", "detected_capabilities", "remotes", "documentation",
@@ -53,11 +53,20 @@ def search(req: SearchQuery, _=Depends(verify_token)):
 
             if row:
                 base_score = float(distances[0][i])
-                agent_text = ((row["description"] or "") + " " + (row["detected_capabilities"] or "")).lower()
+                llm_caps = ""
+                if row["llm_extracted"]:
+                    try:
+                        extracted = json.loads(row["llm_extracted"])
+                        caps = extracted.get("capabilities") or []
+                        if isinstance(caps, list):
+                            llm_caps = " ".join(str(c) for c in caps)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                agent_text = ((row["description"] or "") + " " + (row["detected_capabilities"] or "") + " " + llm_caps).lower()
 
                 for domain in active_domains:
                     if any(w in agent_text for w in DOMAINS[domain]):
-                        base_score += 0.15
+                        base_score += 0.05
                         break
 
                 result = dict(row)
