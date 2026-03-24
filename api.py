@@ -1,6 +1,9 @@
 import json
 import os
+from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException
+
+load_dotenv()
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 import faiss
@@ -29,6 +32,10 @@ _JSON_COLUMNS = {"tools", "detected_capabilities", "remotes", "documentation",
                  "documentation_chunks", "llm_extracted"}
 
 class SearchQuery(BaseModel):
+    query: str
+    limit: int = 50
+
+class KeywordSearchQuery(BaseModel):
     query: str
     limit: int = 50
 
@@ -85,3 +92,37 @@ def search(req: SearchQuery, _=Depends(verify_token)):
 
     results = sorted(results, key=lambda x: x["score"], reverse=True)
     return {"results": results}
+
+_KEYWORD_SEARCH_FIELDS = ("name", "description", "tools", "detected_capabilities",
+                          "documentation", "llm_extracted")
+
+@app.post("/search/keyword")
+def keyword_search(req: KeywordSearchQuery, _=Depends(verify_token)):
+    keywords = [k for k in req.query.lower().split() if k]
+    if not keywords:
+        return {"results": []}
+
+    with sqlite3.connect('agents.db') as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT * FROM agents").fetchall()
+
+    results = []
+    for row in rows:
+        text_blob = " ".join((row[f] or "") for f in _KEYWORD_SEARCH_FIELDS).lower()
+        score = sum(1 for kw in keywords if kw in text_blob)
+        if score == 0:
+            continue
+
+        result = dict(row)
+        for col in _JSON_COLUMNS:
+            if result.get(col):
+                result[col] = json.loads(result[col])
+        for col in ("is_available", "is_ai_agent"):
+            v = result.get(col)
+            result[col] = bool(v) if v is not None else None
+        result["score"] = score
+        result.pop("faiss_id", None)
+        results.append(result)
+
+    results.sort(key=lambda x: x["score"], reverse=True)
+    return {"results": results[:req.limit]}
